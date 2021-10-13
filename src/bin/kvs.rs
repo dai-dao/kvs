@@ -1,5 +1,7 @@
 use clap::{App, Arg, SubCommand, AppSettings};
 use std::process::exit;
+use std::env;
+use kvs::{KvStore, Result};
 
 
 fn main() {
@@ -34,21 +36,30 @@ fn main() {
 
     match matches.occurrences_of("V") {
         1 => println!(env!("CARGO_PKG_VERSION")),
-        _ => println!("No version arg"),
+        _ => {}
     }
-    
-    // You can check for the existence of subcommands, and if found use their
-    // matches just as you would the top level app
+
+    //    
+    let path = env::current_dir().unwrap();
+    let mut store = KvStore::open(path.as_path()).unwrap();
+  
     if let Some(ref _matches) = matches.subcommand_matches("get") {
-        eprintln!("unimplemented");
-        exit(1);
+        let key = _matches.args["key"].vals[0].clone().into_string().unwrap();
+        match store.get(key.to_owned()) {
+            Some(val) => println!("{}", val),
+            None => println!("Key not found")
+        }
     }
     if let Some(ref _matches) = matches.subcommand_matches("rm") {
-        eprintln!("unimplemented");
-        exit(1);
+        let key = _matches.args["key"].vals[0].clone().into_string().unwrap();
+        match store.get(key.to_owned()) {
+            Some(val) => store.remove(key.to_owned()),
+            None => {
+                println!("Key not found");
+                exit(1);
+            }
+        }
     }
     if let Some(ref _matches) = matches.subcommand_matches("set") {
-        eprintln!("unimplemented");
-        exit(1);
     }
 }
