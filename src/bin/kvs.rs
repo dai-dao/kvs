@@ -4,7 +4,7 @@ use std::env;
 use kvs::{KvStore, Result};
 
 
-fn main() {
+fn main() -> Result<()> {
     let matches = App::new("Simple key-value store")
                             .setting(AppSettings::ArgRequiredElseHelp)
                             .version("1.0")
@@ -45,15 +45,15 @@ fn main() {
   
     if let Some(ref _matches) = matches.subcommand_matches("get") {
         let key = _matches.args["key"].vals[0].clone().into_string().unwrap();
-        match store.get(key.to_owned()) {
+        match store.get(key.to_owned())? {
             Some(val) => println!("{}", val),
             None => println!("Key not found")
         }
     }
     if let Some(ref _matches) = matches.subcommand_matches("rm") {
         let key = _matches.args["key"].vals[0].clone().into_string().unwrap();
-        match store.get(key.to_owned()) {
-            Some(val) => store.remove(key.to_owned()),
+        match store.get(key.to_owned())? {
+            Some(_) => { store.remove(key.to_owned()).ok(); },
             None => {
                 println!("Key not found");
                 exit(1);
@@ -62,4 +62,6 @@ fn main() {
     }
     if let Some(ref _matches) = matches.subcommand_matches("set") {
     }
+
+    Ok(())
 }

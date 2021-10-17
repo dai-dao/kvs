@@ -7,17 +7,25 @@ use std::io::BufReader;
 
 
 // Define a generic alias for a `Result` with the error type `ParseIntError`.
-pub type Result<T> = std::result::Result<T, KvPathNotFoundError>;
+pub type Result<T> = std::result::Result<T, KvsError>;
 
 
 #[derive(Debug, Clone)]
-pub struct KvPathNotFoundError;
-impl fmt::Display for KvPathNotFoundError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Path not found")
-    }
+pub enum KvsError {
+    KvPathNotFoundError,
+    KeyNotFoundError
 }
 
+impl fmt::Display for KvsError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            KvsError::KvPathNotFoundError =>
+                write!(f, "Path not found"),
+            KvsError::KeyNotFoundError =>
+                write!(f, "Key not found to remove"),
+            }
+    }
+}
 
 
 #[derive(Default)]
@@ -33,7 +41,7 @@ impl KvStore {
             let file_path = path.join("kv.json");
             Ok(KvStore { map : HashMap::new(), path : Some(file_path) })
         } else {
-            Err(KvPathNotFoundError)
+            Err(KvsError::KvPathNotFoundError)
         }
     }
 
@@ -42,24 +50,28 @@ impl KvStore {
     }
 
     // pass in reference of self to NOT move value
-    pub fn remove(&mut self, key : String) {
-        self.map.remove(&key);
-        // write to file every insert, hmm not efficient
-        match self.path {
-            Some (ref path) => {
-                let mut tmp_file = File::create(path).expect("overwrite db.json");
-                to_writer(tmp_file, &self.map);
-            } 
-            None => ()
-        };
+    pub fn remove(&mut self, key : String) -> Result<Option<String>> {
+        let out = self.map.remove(&key);
+        // write to file every remove
+        match out {
+            Some(val) => match self.path {
+                    Some (ref path) => {
+                        let tmp_file = File::create(path).expect("overwrite db.json");
+                        to_writer(tmp_file, &self.map).ok();
+                        Ok(Some(val))
+                    } 
+                    None => Ok(Some(val))
+                }
+            None => Err(KvsError::KeyNotFoundError)
+        }
     }
 
     // pass in reference of self to NOT move value
-    pub fn get(&mut self, key : String) -> Option<String> {
+    pub fn get(&mut self, key : String) -> Result<Option<String>> {
         match self.path {
             Some (ref path) => {
                 if path.exists() {
-                    let mut tmp_file = File::open(path).expect("read db.json");
+                    let tmp_file = File::open(path).expect("read db.json");
                     let reader = BufReader::new(tmp_file);
                     self.map = serde_json::from_reader(reader).unwrap();
                 }
@@ -67,17 +79,17 @@ impl KvStore {
             None => ()
         };
         // copy return value
-        self.map.get(&key).cloned()
+        Ok(self.map.get(&key).cloned())
     }
 
     // pass in reference of self to NOT move value
     pub fn set(&mut self, key : String, value : String) -> Result<()> {
         self.map.insert(key, value);
-        // write to file every insert, hmm not efficient
+        // write to file every insert
         match self.path {
             Some (ref path) => {
-                let mut tmp_file = File::create(path).expect("overwrite db.json");
-                to_writer(tmp_file, &self.map);
+                let tmp_file = File::create(path).expect("overwrite db.json");
+                to_writer(tmp_file, &self.map).ok();
             } 
             None => ()
         };
