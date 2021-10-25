@@ -16,14 +16,7 @@ enum Command {
     Remove { key : String },
 }
 
-
 pub struct KvStore {
-    map : HashMap<String, String>,
-    path : Option<PathBuf>,
-    kv2 : KvStore2,
-}
-
-pub struct KvStore2 {
     index : HashMap<String, CommandOffset>,
     writer : MyWriter<File>,
     reader : BufReader<File>,
@@ -33,7 +26,6 @@ pub struct MyWriter<W : std::io::Write> {
     buf : BufWriter<W>,
     offset : usize, // keep track of where the writer is at now
 }
-
 
 #[derive(Debug)]
 pub struct CommandOffset {
@@ -61,39 +53,37 @@ impl KvStore {
                         .create(true)
                         .open(&gen_file)?;
         let writer = MyWriter { buf : BufWriter::new(file), offset : current_offset };
-        let kv2 = KvStore2 { index : index, writer : writer, reader : BufReader::new(File::open(&gen_file)?) };
-
-        // 
-        if path.exists() {
-            let file_path = path.join("kv.json");
-            Ok(KvStore { map : HashMap::new(), path : Some(file_path), kv2 : kv2 })
-        } else {
-            Err(KvsError::KvPathNotFoundError)
-        }
+        Ok (KvStore { index : index, writer : writer, reader : BufReader::new(File::open(&gen_file)?) })
     }
 
     // pass in reference of self to NOT move value
     pub fn remove(&mut self, key : String) -> Result<Option<String>> {
-        let out = self.map.remove(&key);
-        // write to file every remove
-        match out {
-            Some(val) => match self.path {
-                    Some (ref path) => {
-                        let tmp_file = File::create(path).expect("overwrite db.json");
-                        to_writer(tmp_file, &self.map).ok();
-                        Ok(Some(val))
-                    } 
-                    None => Ok(Some(val))
+        // remove from in-memory index
+        let value = self.index.remove(&key);
+        // write to log
+        let cmd = Command::Remove { key : key.to_owned() };
+        to_writer(&mut self.writer, &cmd)?;
+        self.writer.flush()?;
+        //
+        match value {
+            Some(command_offset) => {
+                self.reader.seek(SeekFrom::Start(command_offset.start as u64))?;
+                let entry_reader = (&mut self.reader).take(command_offset.end as u64);
+                if let Command::Set { value, .. } = serde_json::from_reader(entry_reader)? {
+                    Ok(Some(value))
+                } else {
+                    Err(KvsError::KeyNotFoundError)
                 }
+            },
             None => Err(KvsError::KeyNotFoundError)
         }
     }
 
     // pass in reference of self to NOT move value
     pub fn get(&mut self, key : String) -> Result<Option<String>> {
-        if let Some(command_offset) = self.kv2.index.get(&key) {
-            self.kv2.reader.seek(SeekFrom::Start(command_offset.start as u64))?;
-            let entry_reader = (&mut self.kv2.reader).take(command_offset.end as u64);
+        if let Some(command_offset) = self.index.get(&key) {
+            self.reader.seek(SeekFrom::Start(command_offset.start as u64))?;
+            let entry_reader = (&mut self.reader).take(command_offset.end as u64);
             if let Command::Set { value, .. } = serde_json::from_reader(entry_reader)? {
                 Ok(Some(value))
             } else {
@@ -108,21 +98,10 @@ impl KvStore {
     pub fn set(&mut self, key : String, value : String) -> Result<()> {
         // write command to log on disk
         let cmd = Command::Set { key : key.to_owned(), value : value.to_owned() };
-        let start = self.kv2.writer.offset;
-        to_writer(&mut self.kv2.writer, &cmd)?;
-        self.kv2.writer.flush()?;
-        // add to index
-        self.kv2.index.insert(key.to_owned(), CommandOffset { start : start, end : self.kv2.writer.offset-start });
-        //
-        self.map.insert(key, value);
-        // write to file every insert
-        match self.path {
-            Some (ref path) => {
-                let tmp_file = File::create(path).expect("overwrite db.json");
-                to_writer(tmp_file, &self.map).ok();
-            } 
-            None => ()
-        };
+        let start = self.writer.offset;
+        to_writer(&mut self.writer, &cmd)?;
+        self.writer.flush()?;
+        self.index.insert(key.to_owned(), CommandOffset { start : start, end : self.writer.offset-start });
         Ok(())
     }
 
