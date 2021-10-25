@@ -49,16 +49,19 @@ impl KvStore {
         let mut index : HashMap<String, CommandOffset> = HashMap::new();
         // load the gen file into index
         let gen_file = path.join("1.log");
-        load(&gen_file, &mut index);
+        let mut current_offset = 0;
+        match  load(&gen_file, &mut index) {
+            Ok(offset) => current_offset = offset,
+            Err(_) => ()
+        }
         let file = fs::OpenOptions::new()
                         .read(true)
                         .write(true)
                         .append(true)
                         .create(true)
                         .open(&gen_file)?;
-        let writer = MyWriter { buf : BufWriter::new(file), offset : 0 };
+        let writer = MyWriter { buf : BufWriter::new(file), offset : current_offset };
         let kv2 = KvStore2 { index : index, writer : writer, reader : BufReader::new(File::open(&gen_file)?) };
-
 
         // 
         if path.exists() {
@@ -90,8 +93,8 @@ impl KvStore {
     pub fn get(&mut self, key : String) -> Result<Option<String>> {
         if let Some(command_offset) = self.kv2.index.get(&key) {
             self.kv2.reader.seek(SeekFrom::Start(command_offset.start as u64))?;
-            let mut entry_reader = (&mut self.kv2.reader).take(command_offset.end as u64);
-            if let Command::Set { key, value } = serde_json::from_reader(entry_reader)? {
+            let entry_reader = (&mut self.kv2.reader).take(command_offset.end as u64);
+            if let Command::Set { value, .. } = serde_json::from_reader(entry_reader)? {
                 Ok(Some(value))
             } else {
                 Err(KvsError::KeyNotFoundError)
@@ -99,18 +102,6 @@ impl KvStore {
         } else {
             Ok(None)
         }
-
-        // match self.path {
-        //     Some (ref path) => {
-        //         if path.exists() {
-        //             let tmp_file = File::open(path).expect("read db.json");
-        //             let reader = BufReader::new(tmp_file);
-        //             self.map = serde_json::from_reader(reader).unwrap();
-        //         }
-        //     } 
-        //     None => ()
-        // };
-        // Ok(self.map.get(&key).cloned())
     }
 
     // pass in reference of self to NOT move value
@@ -118,12 +109,10 @@ impl KvStore {
         // write command to log on disk
         let cmd = Command::Set { key : key.to_owned(), value : value.to_owned() };
         let start = self.kv2.writer.offset;
-        to_writer(&mut self.kv2.writer, &cmd);
+        to_writer(&mut self.kv2.writer, &cmd)?;
         self.kv2.writer.flush()?;
         // add to index
         self.kv2.index.insert(key.to_owned(), CommandOffset { start : start, end : self.kv2.writer.offset-start });
-
-
         //
         self.map.insert(key, value);
         // write to file every insert
@@ -152,19 +141,20 @@ impl<W: Write> Write for MyWriter<W> {
 }
 
 
-fn load(path : &PathBuf, index : &mut HashMap<String, CommandOffset>) -> Result<()> {
+fn load(path : &PathBuf, index : &mut HashMap<String, CommandOffset>) -> Result<usize> {
     let reader = BufReader::new(File::open(&path)?);
     let stream = &mut Deserializer::from_reader(reader).into_iter::<Command>();
     let mut current_offset = stream.byte_offset();
     while let Some(command) = stream.next() {
         let new_pos = stream.byte_offset();
+
         match command? {
-            Command::Set { key , value } => index.insert(key, CommandOffset { start : current_offset, 
+            Command::Set { key , .. } => index.insert(key, CommandOffset { start : current_offset, 
                                                                               end : new_pos-current_offset }),
             Command::Remove { key } => index.remove(&key),
         };
         current_offset = new_pos;
     }
 
-    Ok(())
+    Ok(current_offset)
 }

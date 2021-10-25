@@ -30,13 +30,13 @@ impl fmt::Display for KvsError {
 }
 
 impl From<std::io::Error> for KvsError {
-    fn from(err: std::io::Error) -> KvsError {
+    fn from(_err: std::io::Error) -> KvsError {
         KvsError::IoError
     }
 }
 
 impl From<serde_json::Error> for KvsError {
-    fn from(err: serde_json::Error) -> KvsError {
+    fn from(_err: serde_json::Error) -> KvsError {
         KvsError::SerdeError
     }
 }
