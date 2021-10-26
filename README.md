@@ -5,4 +5,4 @@ https://github.com/pingcap/talent-plan/
 
 
 # To run a specific test
-- cargo test overwrite_value -- --exact --nocapture
+- cargo test get_stored_value -- --exact --nocapture
