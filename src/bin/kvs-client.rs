@@ -13,7 +13,7 @@ fn main() -> Result<()> {
                             .arg(Arg::with_name("V")
                                 .short("V")
                                 .multiple(true)
-                                .help("Sets the level of verbosity"))
+                                .help("Get version"))
                             .subcommand(SubCommand::with_name("get")
                                         .about("Get string value of a given string key")
                                         .arg(Arg::with_name("key")
