@@ -1,6 +1,13 @@
 use crate::Result;
 
 
+mod kvs;
+mod sled;
+
+pub use self::kvs::KvStore;
+pub use self::sled::SledKvsEngine;
+
+
 pub trait KvsEngine {
     /// Sets the value of a string key to a string.
     ///

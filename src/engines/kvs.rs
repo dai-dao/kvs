@@ -8,6 +8,8 @@ use std::ffi::OsStr;
 use crate::{KvsError, Result};
 use std::str;
 
+use super::KvsEngine;
+
 
 const COMPACTION_THRESHOLD: usize = 1024 * 1024;
 
@@ -21,7 +23,6 @@ enum Command {
 pub struct KvStore {
     index : HashMap<String, CommandOffset>,
     writer : MyWriter<File>,
-    // reader : BufReader<File>,
     readers : HashMap<u64, BufReader<File>>,
     uncompacted : usize,
     current_gen : u64,
@@ -169,6 +170,21 @@ impl KvStore {
         return Ok(MyWriter { buf : BufWriter::new(file), offset : 0 })
     }
 
+}
+
+
+impl KvsEngine for KvStore {
+    fn set(&mut self, key: String, value: String) -> Result<()> {
+        self.set(key,value)
+    }
+
+    fn get(&mut self, key: String) -> Result<Option<String>> {
+        self.get(key)
+    }
+
+    fn remove(&mut self, key: String) -> Result<()> {
+        self.remove(key)
+    }
 }
 
 

@@ -7,6 +7,7 @@ use std::fs;
 use std::net::SocketAddr;
 use std::process::exit;
 use structopt::StructOpt;
+use crate::KvsServer;
 
 
 arg_enum! {
@@ -76,20 +77,18 @@ fn run(opt : Opt) -> Result<()> {
     // write engine to engine file
     fs::write(current_dir()?.join("engine"), format!("{}", engine))?;
 
-    Ok(())
-
-    // match engine {
-    //     Engine::kvs => run_with_engine(KvStore::open(current_dir()?)?, opt.addr),
-    //     Engine::sled => run_with_engine(SledKvsEngine::new(sled::open(current_dir()?)?), opt.addr),
-    // }
+    match engine {
+        Engine::kvs => run_with_engine(KvStore::open(&current_dir()?)?, opt.addr),
+        Engine::sled => run_with_engine(SledKvsEngine::new(sled::open(current_dir()?)?), opt.addr),
+    }
 }
 
 
 
-// fn run_with_engine<E : KvsEngine>(engine : E, addr : SocketAddr) -> Result<()> {
-//     let server = KvsServer::new(engine);
-//     server.run(addr)
-// }
+fn run_with_engine<E : KvsEngine>(engine : E, addr : SocketAddr) -> Result<()> {
+    let server = KvsServer::new(engine);
+    server.run(addr)
+}
 
 
 
