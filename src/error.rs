@@ -11,6 +11,8 @@ pub type Result<T> = std::result::Result<T, KvsError>;
 pub enum KvsError {
     KvPathNotFoundError,
     KeyNotFoundError,
+    KeyNotFound,
+    UnexpectedCommandType,
     IoError,
     SerdeError,
     StringError(String),
@@ -21,6 +23,10 @@ pub enum KvsError {
 impl fmt::Display for KvsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &*self {
+            KvsError::KeyNotFound =>
+                write!(f, "Key not found"),
+            KvsError::UnexpectedCommandType =>
+                write!(f, "Unexpected command type"),
             KvsError::KvPathNotFoundError =>
                 write!(f, "Path not found"),
             KvsError::KeyNotFoundError =>
