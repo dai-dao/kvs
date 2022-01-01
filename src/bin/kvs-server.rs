@@ -73,7 +73,7 @@ fn main() {
 fn run(opt : Opt) -> Result<()> {
     let engine = opt.engine.unwrap_or(DEFAULT_ENGINE);
     let cpus = num_cpus::get() as u8;
-    let pool = SharedQueueThreadPool::new(cpus)?;
+    let pool = SharedRayonThreadPool::new(cpus)?;
     info!("Thread pool : Naive thread pool");
     info!("kvs-server {}", env!("CARGO_PKG_VERSION"));
     info!("Storage engine: {}", engine);

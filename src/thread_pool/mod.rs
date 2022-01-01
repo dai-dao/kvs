@@ -1,7 +1,9 @@
 
 mod naive;
 mod shared_queue;
+mod shared_rayon;
 
+pub use self::shared_rayon::SharedRayonThreadPool;
 pub use self::naive::NaiveThreadPool;
 pub use self::shared_queue::SharedQueueThreadPool;
 use crate::Result;
