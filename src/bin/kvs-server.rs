@@ -8,6 +8,8 @@ use std::net::SocketAddr;
 use std::process::exit;
 use structopt::StructOpt;
 use crate::KvsServer;
+use crate::thread_pool::*;
+use num_cpus;
 
 
 arg_enum! {
@@ -70,6 +72,9 @@ fn main() {
 
 fn run(opt : Opt) -> Result<()> {
     let engine = opt.engine.unwrap_or(DEFAULT_ENGINE);
+    let cpus = num_cpus::get() as u8;
+    let pool = SharedQueueThreadPool::new(cpus)?;
+    info!("Thread pool : Naive thread pool");
     info!("kvs-server {}", env!("CARGO_PKG_VERSION"));
     info!("Storage engine: {}", engine);
     info!("Listening on {}", opt.addr);
@@ -78,15 +83,15 @@ fn run(opt : Opt) -> Result<()> {
     let currentd = current_dir()?;
     fs::write(currentd.join("engine"), format!("{}", engine))?;
     match engine {
-        Engine::kvs => run_with_engine(KvStore::open(&current_dir()?)?, opt.addr),
-        Engine::sled => run_with_engine(SledKvsEngine::new(sled::open(current_dir()?)?), opt.addr),
+        Engine::kvs => run_with_engine(KvStore::open(&current_dir()?)?, opt.addr, pool),
+        Engine::sled => run_with_engine(SledKvsEngine::new(sled::open(current_dir()?)?), opt.addr, pool),
     }
 }
 
 
 
-fn run_with_engine<E : KvsEngine>(engine : E, addr : SocketAddr) -> Result<()> {
-    let server = KvsServer::new(engine);
+fn run_with_engine<E : KvsEngine, P : ThreadPool>(engine : E, addr : SocketAddr, pool : P) -> Result<()> {
+    let server = KvsServer::new(engine, pool);
     server.run(addr)
 }
 

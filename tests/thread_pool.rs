@@ -21,7 +21,7 @@ fn spawn_counter<P: ThreadPool>(pool: P) -> Result<()> {
                 counter.fetch_add(1, Ordering::SeqCst);
             }
             drop(wg);
-        })
+        });
     }
 
     wg.wait();
@@ -40,7 +40,7 @@ fn spawn_panic_task<P: ThreadPool>() -> Result<()> {
             panic_control::disable_hook_in_current_thread();
 
             panic!();
-        })
+        });
     }
 
     spawn_counter(pool)
@@ -49,5 +49,12 @@ fn spawn_panic_task<P: ThreadPool>() -> Result<()> {
 #[test]
 fn naive_thread_pool_spawn_counter() -> Result<()> {
     let pool = NaiveThreadPool::new(4)?;
+    spawn_counter(pool)
+}
+
+
+#[test]
+fn shared_queue_thread_pool_spawn_counter() -> Result<()> {
+    let pool = SharedQueueThreadPool::new(4)?;
     spawn_counter(pool)
 }

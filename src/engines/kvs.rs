@@ -7,6 +7,7 @@ use serde::{Serialize, Deserialize};
 use std::ffi::OsStr;
 use crate::{KvsError, Result};
 use std::str;
+use std::sync::{Arc, Mutex};
 
 use super::KvsEngine;
 
@@ -20,13 +21,20 @@ enum Command {
     Remove { key : String },
 }
 
+// need arc mutex because it'll be owned by many ownerships and shared between multiple threads
+// so need thread-safe and synchronization lock for write protection 
 pub struct KvStore {
+    path : PathBuf,
+    writer: Arc<Mutex<StoreWriter>> 
+}
+
+pub struct StoreWriter {
     index : HashMap<String, CommandOffset>,
     writer : MyWriter<File>,
-    readers : HashMap<u64, BufReader<File>>,
     uncompacted : usize,
     current_gen : u64,
-    path : PathBuf
+    path : PathBuf,
+    readers : HashMap<u64, BufReader<File>>,
 }
 
 pub struct MyWriter<W : std::io::Write> {
@@ -53,7 +61,6 @@ impl KvStore {
             uncompacted += load(gen, &mut reader, &mut index)?;
             readers.insert(gen, reader);
         }
-
         // use latest gen file to write
         let last_gen = gen_files.last().unwrap_or(&0) + 1;
         let file = fs::OpenOptions::new()
@@ -64,10 +71,13 @@ impl KvStore {
                         .open(&log_path(path, last_gen))?;
         let writer = MyWriter { buf : BufWriter::new(file), offset : 0 };
         readers.insert(last_gen, BufReader::new(File::open(log_path(path, last_gen))?));
-        Ok (KvStore { index : index, writer : writer, readers : readers, 
-                      uncompacted : uncompacted, current_gen : last_gen, path : path.into() })
+        let store_writer = StoreWriter { index : index, writer : writer, readers : readers, 
+                                        uncompacted : uncompacted, current_gen : last_gen, path : path.into() };
+        Ok (KvStore { path : path.into(), writer: Arc::new(Mutex::new(store_writer)) })
     }
+}
 
+impl StoreWriter {
     // pass in reference of self to NOT move value
     pub fn remove(&mut self, key : String) -> Result<()> {
         // remove from in-memory index
@@ -174,16 +184,26 @@ impl KvStore {
 
 
 impl KvsEngine for KvStore {
-    fn set(&mut self, key: String, value: String) -> Result<()> {
-        self.set(key,value)
+    fn set(&self, key: String, value: String) -> Result<()> {
+        self.writer.lock().unwrap().set(key,value)
     }
 
-    fn get(&mut self, key: String) -> Result<Option<String>> {
-        self.get(key)
+    fn get(&self, key: String) -> Result<Option<String>> {
+        self.writer.lock().unwrap().get(key)
     }
 
-    fn remove(&mut self, key: String) -> Result<()> {
-        self.remove(key)
+    fn remove(&self, key: String) -> Result<()> {
+        self.writer.lock().unwrap().remove(key)
+    }
+}
+
+
+impl Clone for KvStore {
+    fn clone(&self) -> Self {
+        KvStore {
+            path : self.path.clone(),
+            writer: Arc::clone(&self.writer)
+        }
     }
 }
 

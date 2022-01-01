@@ -340,7 +340,7 @@ fn cli_access_server_kvs_engine() {
 }
 
 
-#[test]
-fn cli_access_server_sled_engine() {
-    cli_access_server("sled", "127.0.0.1:4005");
-}
+// #[test]
+// fn cli_access_server_sled_engine() {
+//     cli_access_server("sled", "127.0.0.1:4005");
+// }

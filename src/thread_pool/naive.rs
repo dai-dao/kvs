@@ -4,7 +4,6 @@ use crate::Result;
 use super::ThreadPool;
 
 
-
 pub struct NaiveThreadPool;
 // { 
     // num : u8 
@@ -13,9 +12,8 @@ pub struct NaiveThreadPool;
 
 impl ThreadPool for NaiveThreadPool {
     fn spawn<F>(&self, f: F)
-    where
-        F: FnOnce() + Send + 'static, {
-
+        where F: FnOnce() + Send + 'static
+    {
         thread::spawn(f);
     }
 
